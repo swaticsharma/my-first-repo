@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Medwise",
+    "slug": "medwise",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "medwise",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.medwise.app" },
+    "android": { "package": "com.medwise.app" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
