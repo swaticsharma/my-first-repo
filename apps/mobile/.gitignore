@@ -1,0 +1,10 @@
+node_modules
+.expo
+.expo-shared
+dist
+ios/
+android/
+google-play-service-account.json
+*.p8
+*.p12
+*.mobileprovision
