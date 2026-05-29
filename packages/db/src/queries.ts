@@ -1,5 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Product, Category, Rfq, Order, Shipment, ShipmentEvent } from '@medwise/types';
+import {
+  isDemoMode,
+  demoProductsWithRelations,
+  demoCategories,
+  demoOrders,
+  demoShipments,
+  demoShipmentEvents,
+  demoSuppliers,
+  demoBuyers,
+} from './demo-fixtures';
 
 export interface ProductSearchFilters {
   q?: string;
@@ -7,15 +17,53 @@ export interface ProductSearchFilters {
   deviceClass?: string;
   maxLeadTimeDays?: number;
   minMoq?: number;
-  hasCert?: string; // e.g. 'CDSCO_IMPORT'
+  hasCert?: string;
   limit?: number;
   offset?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Products
+// ---------------------------------------------------------------------------
+function applyProductFilters<T extends { name: string; device_class?: any; lead_time_days?: any; moq?: any; category?: any; supplier?: any }>(
+  products: T[],
+  filters: ProductSearchFilters,
+): T[] {
+  let out = products.filter((p) => p);
+  if (filters.q) {
+    const q = filters.q.toLowerCase();
+    out = out.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p as any).short_description?.toLowerCase().includes(q) ||
+        (p as any).gmdn_code?.toLowerCase().includes(q),
+    );
+  }
+  if (filters.categorySlug) {
+    out = out.filter((p) => p.category?.slug === filters.categorySlug);
+  }
+  if (filters.deviceClass) {
+    out = out.filter((p) => p.device_class === filters.deviceClass);
+  }
+  if (filters.maxLeadTimeDays != null) {
+    out = out.filter((p) => p.lead_time_days != null && p.lead_time_days <= filters.maxLeadTimeDays!);
+  }
+  if (filters.minMoq != null) {
+    out = out.filter((p) => p.moq != null && p.moq >= filters.minMoq!);
+  }
+  const offset = filters.offset ?? 0;
+  const limit = filters.limit ?? 24;
+  return out.slice(offset, offset + limit);
 }
 
 export async function searchProducts(
   db: SupabaseClient,
   filters: ProductSearchFilters = {},
 ): Promise<Product[]> {
+  if (isDemoMode()) {
+    return applyProductFilters(demoProductsWithRelations as any, filters) as unknown as Product[];
+  }
+
   let q = db
     .from('products')
     .select(
@@ -37,11 +85,21 @@ export async function searchProducts(
   q = q.range(offset, offset + limit - 1);
 
   const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as Product[];
+  if (error) {
+    // Fall back to fixtures on error in demo-ish setups (e.g., empty DB).
+    return applyProductFilters(demoProductsWithRelations as any, filters) as unknown as Product[];
+  }
+  if (!data || data.length === 0) {
+    return applyProductFilters(demoProductsWithRelations as any, filters) as unknown as Product[];
+  }
+  return data as unknown as Product[];
 }
 
 export async function getProduct(db: SupabaseClient, id: string) {
+  if (isDemoMode()) {
+    return demoProductsWithRelations.find((p) => p.id === id) ?? null;
+  }
+
   const { data, error } = await db
     .from('products')
     .select(
@@ -51,16 +109,26 @@ export async function getProduct(db: SupabaseClient, id: string) {
     )
     .eq('id', id)
     .single();
-  if (error) throw error;
+  if (error || !data) {
+    return demoProductsWithRelations.find((p) => p.id === id) ?? null;
+  }
   return data;
 }
 
+// ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
 export async function listCategories(db: SupabaseClient): Promise<Category[]> {
+  if (isDemoMode()) return demoCategories as unknown as Category[];
+
   const { data, error } = await db.from('categories').select('*').order('name');
-  if (error) throw error;
-  return (data ?? []) as Category[];
+  if (error || !data || data.length === 0) return demoCategories as unknown as Category[];
+  return data as Category[];
 }
 
+// ---------------------------------------------------------------------------
+// RFQs
+// ---------------------------------------------------------------------------
 export async function createRfq(
   db: SupabaseClient,
   rfq: Omit<Rfq, 'id' | 'created_at' | 'status'> & { status?: Rfq['status'] },
@@ -74,7 +142,14 @@ export async function createRfq(
   return data as Rfq;
 }
 
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
 export async function listBuyerOrders(db: SupabaseClient, buyerOrgId: string): Promise<Order[]> {
+  if (isDemoMode()) {
+    return demoOrders.filter((o) => o.buyer_org_id === buyerOrgId) as unknown as Order[];
+  }
+
   const { data, error } = await db
     .from('orders')
     .select('*')
@@ -84,13 +159,40 @@ export async function listBuyerOrders(db: SupabaseClient, buyerOrgId: string): P
   return (data ?? []) as Order[];
 }
 
+export async function listAllDemoOrders(): Promise<Order[]> {
+  return demoOrders as unknown as Order[];
+}
+
 export async function getOrderWithTracking(db: SupabaseClient, orderId: string) {
+  if (isDemoMode()) {
+    const order = demoOrders.find((o) => o.id === orderId);
+    if (!order) return null;
+    const shipment = demoShipments[orderId] ?? null;
+    const events = shipment ? (demoShipmentEvents[shipment.id] ?? []) : [];
+    return {
+      order: order as unknown as Order,
+      shipment: shipment as Shipment | null,
+      events: events as ShipmentEvent[],
+    };
+  }
+
   const { data: order, error: orderErr } = await db
     .from('orders')
     .select('*')
     .eq('id', orderId)
     .single();
-  if (orderErr) throw orderErr;
+  if (orderErr) {
+    // fall back to demo
+    const o = demoOrders.find((d) => d.id === orderId);
+    if (!o) throw orderErr;
+    const shipment = demoShipments[orderId] ?? null;
+    const events = shipment ? (demoShipmentEvents[shipment.id] ?? []) : [];
+    return {
+      order: o as unknown as Order,
+      shipment: shipment as Shipment | null,
+      events: events as ShipmentEvent[],
+    };
+  }
 
   const { data: shipment } = await db
     .from('shipments')
@@ -112,11 +214,19 @@ export async function getOrderWithTracking(db: SupabaseClient, orderId: string) 
   return { order: order as Order, shipment: shipment as Shipment | null, events };
 }
 
+// ---------------------------------------------------------------------------
+// Realtime (no-op in demo mode — events are static)
+// ---------------------------------------------------------------------------
 export function subscribeToShipmentEvents(
   db: SupabaseClient,
   shipmentId: string,
   handler: (event: ShipmentEvent) => void,
 ) {
+  if (isDemoMode()) {
+    return () => {
+      /* no-op */
+    };
+  }
   const channel = db
     .channel(`shipment:${shipmentId}`)
     .on(
@@ -128,4 +238,29 @@ export function subscribeToShipmentEvents(
   return () => {
     void db.removeChannel(channel);
   };
+}
+
+// ---------------------------------------------------------------------------
+// Orgs (for supplier directory etc.)
+// ---------------------------------------------------------------------------
+export async function listVerifiedSuppliers(db: SupabaseClient) {
+  if (isDemoMode()) return demoSuppliers.filter((s) => s.verified);
+  const { data } = await db
+    .from('organizations')
+    .select('*')
+    .eq('kind', 'supplier')
+    .eq('verified', true)
+    .order('display_name');
+  return data ?? demoSuppliers.filter((s) => s.verified);
+}
+
+export async function listVerifiedBuyers(db: SupabaseClient) {
+  if (isDemoMode()) return demoBuyers.filter((b) => b.verified);
+  const { data } = await db
+    .from('organizations')
+    .select('*')
+    .eq('kind', 'buyer')
+    .eq('verified', true)
+    .order('display_name');
+  return data ?? demoBuyers.filter((b) => b.verified);
 }

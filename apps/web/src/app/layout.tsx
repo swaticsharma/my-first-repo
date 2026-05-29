@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { SiteHeader } from '@/components/site-header';
+import { DemoBanner } from '@/components/demo-banner';
 
 export const metadata: Metadata = {
   title: 'Medwise — Medtech marketplace, India ↔ China',
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen flex flex-col">
         <SiteHeader />
+        <DemoBanner />
         <main className="flex-1">{children}</main>
         <footer className="border-t border-slate-200 bg-white py-6 text-center text-sm text-slate-500">
           © {new Date().getFullYear()} Medwise. India ↔ China medtech marketplace.
