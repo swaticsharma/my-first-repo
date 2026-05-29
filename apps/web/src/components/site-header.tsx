@@ -13,11 +13,12 @@ export function SiteHeader() {
           <Link href="/catalogue" className="hover:text-slate-900">Catalogue</Link>
           <Link href="/rfq/new" className="hover:text-slate-900">Post an RFQ</Link>
           <Link href="/orders" className="hover:text-slate-900">My orders</Link>
+          <Link href="/login" className="hover:text-slate-900">Sign in</Link>
           <Link
-            href="/supplier/signup"
+            href="/onboarding/choose"
             className="rounded-md bg-brand-600 px-3 py-1.5 text-white hover:bg-brand-700"
           >
-            Become a supplier
+            Get started
           </Link>
         </nav>
       </div>
